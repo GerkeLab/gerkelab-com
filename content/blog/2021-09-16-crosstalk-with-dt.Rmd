@@ -18,6 +18,7 @@ tags:
 
 [crosstalk]: https://rstudio.github.io/crosstalk/
 [DT]: https://rstudio.github.io/DT/
+[rmdformats]: https://github.com/juba/rmdformats
 
 This post demonstrates use of the [[crosstalk]]{.pkg} extension to coordinate filtering across multiple [[DT]]{.pkg} `datatable` widgets. The process is embedded in a standard R Markdown document, and is an example of [server(Shiny)-less](https://www.brodrigues.co/blog/2021-03-02-no_shiny_dashboard/) dashboarding/reporting.
 
@@ -204,10 +205,10 @@ datatable(shared_fup)
 
 ## Summary
 
-Note that this approach can work particularly well with rmdformats or other R Markdown theming. For example, here is the above workflow embedded in `rmdformats::robobook` which can be found in [this repo](https://github.com/tgerke/crosstalk-with-dt) with [corresponding interactive webpage](https://tgerke.github.io/crosstalk-with-dt/). Enjoy!
+Note that this approach can work particularly well with [[rmdformats]]{.pkg} or other R Markdown theming. For example, here is the above workflow embedded in `rmdformats::robobook` which can be found in [this repo](https://github.com/tgerke/crosstalk-with-dt) with [corresponding interactive webpage](https://tgerke.github.io/crosstalk-with-dt/). Enjoy!
 
 <div style="width: 100%; display: flex; align-content: center;">
   <div style="margin: auto;">
-  <img src="/blog/2021-09-16-2021-09-16-crosstalk-with-dt_files/crosstalk-with-dt.gif" style="max-width: 600px" />
+  <img src="/blog/2021-09-16-crosstalk-with-dt_files/crosstalk-with-dt.gif" style="max-width: 600px" />
   </div>
 </div>
