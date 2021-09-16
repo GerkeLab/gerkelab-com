@@ -1,0 +1,214 @@
+<style type="text/css">
+details:hover { cursor: pointer }
+</style>
+
+---
+title: Using crosstalk with DT in R Markdown
+description: This is a template for using the crosstalk with several grouped datatable widgets to create filterable reports in R Markdown (i.e. in a non-Shiny setting).
+author: 
+  - "Travis Gerke"
+date: '2021-09-16'
+slug: crosstalk-with-dt
+categories:
+  - R
+tags:
+  - tips
+  - R markdown
+---
+
+[crosstalk]: https://rstudio.github.io/crosstalk/
+[DT]: https://rstudio.github.io/DT/
+[rmdformats]: https://github.com/juba/rmdformats
+
+This post demonstrates use of the [[crosstalk]]{.pkg} extension to coordinate filtering across multiple [[DT]]{.pkg} `datatable` widgets. The process is embedded in a standard R Markdown document, and is an example of [server(Shiny)-less](https://www.brodrigues.co/blog/2021-03-02-no_shiny_dashboard/) dashboarding/reporting.
+
+## Objective
+
+I often need to create reports or dashboards that present information across multiple tables from a database. Frequently, this deliverable is best displayed as a filterable view of the tables themselves in a web browser. This can happen when a primary key in one table (e.g. subject ID) appears in multiple rows of another table (e.g. event based lines of therapy), and I don't want to rectangle the data into a single flat file because it would complicate or mask necessary information.
+
+A seemingly obvious solution here is Shiny, and that's certainly true when you have large data / are querying in real time against a database. However, if your data are small to mid-sized (MB, not GB), you can achieve the above goal in a single html page from R Markdown, without any Shiny server overhead. The following outlines a workflow I've been using to make this possible; something I wanted to document is how to use [[crosstalk]]{.pkg} when you're calling multiple [[DT]]{.pkg} `datatable` widgets in the same `filter_select()` call.
+
+### Simulate data
+
+Let's start by simulating some data that looks similar to what we would get from a clinical trial or other healthcare-related database. There will be three tables: demographics, treatments, and follow-up. The code to do this is a bit long, and ancillary to the main message of this post, so it's hidden below (but feel free to toggle and browse it if you wish!). 
+
+<details>
+  <summary>_Toggle simulation code_</summary>
+```{r simulate-data, message=FALSE}
+library(tidyverse)
+library(lubridate)
+
+### Function to simulate follow up tables
+sim_data_fup <- function(
+  n = 100,
+  dt_sim_start = "2000-01-01",
+  dt_sim_end = "2019-12-31",
+  seed = 12345
+) {
+  set.seed(seed)
+  
+  dt_sim_start <- as_date(dt_sim_start)
+  dt_sim_end <- as_date(dt_sim_end)
+  
+  # generate patient IDs
+  ids <- sample(111111:999999, n, replace = FALSE)
+
+  # simulate the data table
+  data_fup <- tibble(
+    id = ids,
+    ind_event = sample(0:1, n, replace = TRUE, prob = c(.8, .2)),
+    dt_first_contact = sample(dt_sim_start:dt_sim_end, n) %>% as_date(),
+  ) %>%
+    mutate(
+      dt_last_contact =
+        dt_first_contact + sample(1:3000, n, replace = TRUE),
+    ) %>%
+    mutate(
+      dt_last_contact =
+        if_else(dt_last_contact > dt_sim_end, dt_sim_end, dt_last_contact)
+    )
+  
+  data_fup
+}
+
+### Function to simulate demographics tables
+### Accepts a vector of IDs (usually identified from the follow up table)
+sim_data_demo <- function(
+  ids, 
+  age_range = 18:100,
+  race_opts = c("Black", "White")
+) {
+  n = length(ids)
+  
+  data_demo <- tibble(
+    id = ids,
+    age = sample(age_range, n, replace = TRUE),
+    sex = rep("F", n),
+    race = sample(race_opts, n, replace = TRUE, prob = c(.2, .8)),
+    ind_her2 = sample(0:1, n, replace = TRUE, prob = c(.2, .8))
+  )  
+  
+  data_demo
+}
+
+### Function to simulate treatment tables
+### Accepts a follow-up table for IDs and first/last contact dates
+sim_data_trt <- function(
+  data_fup,
+  n_trt_opts = 4, #the maximum number of treatments any patient can have
+  treatment_choices #a character vector of therapy options
+) {
+  n <- data_fup %>% n_distinct("id")
+  n_trt_opts <- 1:n_trt_opts
+  
+  # initialize patient_trt table; we'll bind rows at the end of each loop iteration
+  patient_trt <- tibble()
+  
+  for(i in 1:n) {
+    n_trt <- sample(n_trt_opts, size = 1)
+    
+    ith_patient <- data_fup %>% slice(i) 
+    
+    ith_patient_trt <- ith_patient %>%
+      select(id) %>%
+      slice(rep(1, times = n_trt)) %>% # elongate the table with a row for each treatment
+      mutate(
+        trt = sample(treatment_choices, size = n_trt, replace = TRUE),
+        dt_trt_start = sample(
+          seq(ith_patient$dt_first_contact, ith_patient$dt_last_contact, by="days") %>%
+            sort(),
+          size = n_trt, replace = FALSE
+        )
+      ) %>%
+      arrange(dt_trt_start) %>%
+      mutate(
+        dt_trt_end = lead(dt_trt_start) - 1,
+        dt_trt_end = case_when(
+          row_number() == n() ~ 
+            sample(seq(last(dt_trt_start), ith_patient$dt_last_contact, by="days"), 1),
+          TRUE ~ dt_trt_end
+        )
+      ) 
+    
+    patient_trt <- patient_trt %>% bind_rows(ith_patient_trt)
+  } 
+  
+  patient_trt
+}
+
+# simulate follow-up data
+data_fup <- sim_data_fup(n = 500)
+# simulate demographic data
+data_demo <- sim_data_demo(ids = data_fup$id)
+# simulate treatment data
+data_trt <- 
+  sim_data_trt(
+    data_fup, n_trt_opts = 5, 
+    treatment_choices = c(
+      "TRASTUZUMAB",
+      "PACLITAXEL/CAPECITABINE",
+      "PERTUZUMAB",
+      "PACLITAXEL",
+      "HERCEPTIN",
+      "HERCEPTIN/PACLITAXEL"
+    )
+  )
+```
+</details>
+
+Ultimately, we end up with 3 tables like the following, which we would like the end user to filter interactively by subject ID.
+```{r}
+data_fup
+data_demo
+data_trt
+```
+
+### Filter the tables with crosstalk
+
+Since [`DT` is a `crosstalk` compatible widget](https://rstudio.github.io/crosstalk/widgets.html), it really only takes a few lines to get the desired outcome. The general strategy is to send your data frame into a new `SharedData` object with a line like `SharedData$new(my_data_frame)`. Often, a single `SharedData` object is sufficient for `crosstalk` to coordinate multiple widgets, such as on the [`crosstalk` examples page](https://rstudio.github.io/crosstalk/using.html). Sometimes though, you might want `crosstalk` to operate across several data frames with the same key, meaning you need multiple calls to `SharedData$new()`. The trick here is to use the `key` and `group` arguments in `SharedData$new()`.  In this case, `key = ~id` and we assign the name `group = "shared_obj"`. Next, we pass any of the `SharedData` objects to `filter_select()` which recognizes that the object belongs to a group. Something that was a "gotcha" for me: the `group` argument in `filter_select()` _is not_ the same as `group` in `SharedData`, rather, it's the values that populate the select box (in this case, `id`).
+
+All of this comes together as follows:
+
+```{r crosstalk-with-dt}
+library(DT)
+library(crosstalk)
+
+# set up a group of SharedData objects
+shared_demo <- SharedData$new(data_demo, key = ~id, group = "shared_obj")
+shared_trt <- SharedData$new(data_trt, key = ~id, group = "shared_obj")
+shared_fup <- SharedData$new(data_fup, key = ~id, group = "shared_obj")
+
+# send the group to the filtering selection box
+filter_select(
+  id = "id-selector", label = "ID", 
+  sharedData = shared_demo, group = ~id
+)
+```
+
+**Demographics**
+
+```{r demographics}
+datatable(shared_demo)
+```
+
+**Treatment**
+
+```{r treatment}
+datatable(shared_trt)
+```
+
+**Follow-up**
+
+```{r fup}
+datatable(shared_fup)
+```
+
+## Summary
+
+Note that this approach can work particularly well with [[rmdformats]]{.pkg} or other R Markdown theming. For example, here is the above workflow embedded in `rmdformats::robobook` which can be found in [this repo](https://github.com/tgerke/crosstalk-with-dt) with [corresponding interactive webpage](https://tgerke.github.io/crosstalk-with-dt/). Enjoy!
+
+<div style="width: 100%; display: flex; align-content: center;">
+  <div style="margin: auto;">
+  <img src="/blog/2021-09-16-crosstalk-with-dt_files/crosstalk-with-dt.gif" style="max-width: 600px" />
+  </div>
+</div>
