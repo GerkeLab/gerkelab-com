@@ -22,7 +22,7 @@ header_buttons:
     icon: "fab fa-github"
     class: "secondary"
   - text: "Docker Hub"
-    url: "https://hub.docker.com/r/gerkelab/shinydagd"
+    url: "https://hub.docker.com/r/gerkelab/shinydag"
     icon: "fab fa-docker"
     class: "info"
 ---
