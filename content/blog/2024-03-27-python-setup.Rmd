@@ -19,6 +19,11 @@ tags:
 [DT]: https://rstudio.github.io/DT/
 [rmdformats]: https://github.com/juba/rmdformats
 
+I just want my python projects to work like R projects always have.
+I have a long-running joke about taking a python course where the instructor had to cancel a session because a python installation borked his machine (was this the lesson!?).
+Why is setting up a python environment so hard?
+And, with all due respect, Jupyter notebooks are not the future; I just want a line-by-line REPL.
+
 This post demonstrates use of the [[crosstalk]]{.pkg} extension to coordinate filtering across multiple [[DT]]{.pkg} `datatable` widgets. The process is embedded in a standard R Markdown document, and is an example of [server(Shiny)-less](https://www.brodrigues.co/blog/2021-03-02-no_shiny_dashboard/) dashboarding/reporting.
 
 ## Objective
