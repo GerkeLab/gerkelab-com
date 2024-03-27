@@ -1,0 +1,37 @@
+<style type="text/css">
+details:hover { cursor: pointer }
+</style>
+
+---
+title: Set up python projects like R projects
+description: How to mirror the rig, renv, and rproj frameworks in python
+author: 
+  - "Travis Gerke"
+date: '2024-03-27'
+slug: python-setup
+categories:
+  - python
+tags:
+  - tips
+---
+
+[crosstalk]: https://rstudio.github.io/crosstalk/
+[DT]: https://rstudio.github.io/DT/
+[rmdformats]: https://github.com/juba/rmdformats
+
+This post demonstrates use of the [[crosstalk]]{.pkg} extension to coordinate filtering across multiple [[DT]]{.pkg} `datatable` widgets. The process is embedded in a standard R Markdown document, and is an example of [server(Shiny)-less](https://www.brodrigues.co/blog/2021-03-02-no_shiny_dashboard/) dashboarding/reporting.
+
+## Objective
+
+I often need to create reports or dashboards that present information across multiple tables from a database. Frequently, this deliverable is best displayed as a filterable view of the tables themselves in a web browser. This can happen when a primary key in one table (e.g. subject ID) appears in multiple rows of another table (e.g. event based lines of therapy), and I don't want to rectangle the data into a single flat file because it would complicate or mask necessary information.
+
+A seemingly obvious solution here is Shiny, and that's certainly true when you have large data / are querying in real time against a database. However, if your data are small to mid-sized (MB, not GB), you can achieve the above goal in a single html page from R Markdown, without any Shiny server overhead. The following outlines a workflow I've been using to make this possible; something I wanted to document is how to use [[crosstalk]]{.pkg} when you're calling multiple [[DT]]{.pkg} `datatable` widgets in the same `filter_select()` call.
+
+### Simulate data
+
+Let's start by simulating some data that looks similar to what we would get from a clinical trial or other healthcare-related database. There will be three tables: demographics, treatments, and follow-up. The code to do this is a bit long, and ancillary to the main message of this post, so it's hidden below (but feel free to toggle and browse it if you wish!). 
+
+
+## Summary
+
+Note that this approach can work particularly well with [[rmdformats]]{.pkg} or other R Markdown theming. For example, here is the above workflow embedded in `rmdformats::robobook` which can be found in [this repo](https://github.com/tgerke/crosstalk-with-dt) with [corresponding interactive webpage](https://tgerke.github.io/crosstalk-with-dt/). Enjoy!
